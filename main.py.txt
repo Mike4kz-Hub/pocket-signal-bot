@@ -1,0 +1,93 @@
+import time
+import pytz
+import datetime
+from tradingview_ta import TA_Handler, Interval, Exchange
+from telegram import Bot
+
+# إعدادات التيليغرام
+TELEGRAM_TOKEN = '8135952243:AAGJmti0ZQdVeDRN-f8Cd3eR_WFfoUdHtiU'
+CHANNEL_USERNAME = '@signals_w_mike'
+
+# رابط الإحالة
+REFERRAL_LINK = 'https://po-ru4.click/login?utm_campaign=822955&utm_source=affiliate&utm_medium=sr&a=rxU4hmgPSO9y7Z&ac=mike4trader'
+
+# الأزواج يلي بنشتغل عليها (ممكن تضيف أو تعدل)
+CURRENCY_PAIRS = [
+    'EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'USDCHF',
+    'EURGBP', 'EURJPY', 'AUDCAD', 'AUDCHF', 'CADCHF', 'CADJPY',
+    'EURAUD', 'EURNZD', 'CHFJPY', 'NZDUSD'
+]
+
+# تهيئة بوت التيليغرام
+bot = Bot(token=TELEGRAM_TOKEN)
+
+# UTC-3 timezone
+tz = pytz.timezone('America/Sao_Paulo')
+
+def analyze_signal(pair):
+    handler = TA_Handler(
+        symbol=pair,
+        screener="forex",
+        exchange="FX_IDC",
+        interval=Interval.INTERVAL_1_MINUTE
+    )
+    try:
+        analysis = handler.get_analysis()
+        ema_50 = analysis.indicators.get("EMA50")
+        ema_200 = analysis.indicators.get("EMA200")
+        stochastic_k = analysis.indicators.get("Stoch.K")
+        stochastic_d = analysis.indicators.get("Stoch.D")
+        rsi = analysis.indicators.get("RSI")
+
+        price = analysis.indicators.get("close")
+
+        # شروط CALL
+        if price > ema_200 and price <= ema_50 and stochastic_k < 20 and stochastic_d < 20 and stochastic_k > stochastic_d:
+            return "CALL"
+        
+        # شروط PUT
+        elif price < ema_200 and price >= ema_50 and stochastic_k > 80 and stochastic_d > 80 and stochastic_k < stochastic_d:
+            return "PUT"
+
+    except Exception as e:
+        print(f"[{pair}] تحليل فشل: {e}")
+    
+    return None
+
+def send_signal(pair, direction):
+    now = datetime.datetime.now(tz)
+    time_str = now.strftime('%H:%M')
+
+    message = f"""
+💰: {pair.replace('/', '')}
+⏱️: 1M
+📊: {direction}
+⏳: {time_str} UTC-3
+🔗: {REFERRAL_LINK}
+""".strip()
+
+    bot.send_message(chat_id=CHANNEL_USERNAME, text=message)
+    print(f"📤 تم إرسال إشارة: {pair} → {direction}")
+
+def main():
+    print("🚀 بدء تشغيل بوت إشارات التداول...")
+    while True:
+        try:
+            current_time = datetime.datetime.now(tz)
+            if current_time.minute % 5 == 0 and current_time.second < 10:
+                for pair in CURRENCY_PAIRS:
+                    direction = analyze_signal(pair)
+                    if direction:
+                        send_signal(pair, direction)
+                    else:
+                        print(f"🔍 لا توجد إشارة مناسبة لـ {pair}")
+                print("⏳ الانتظار 5 دقائق قبل التحليل التالي...\n")
+                time.sleep(300)  # انتظر 5 دقائق
+            else:
+                time.sleep(5)
+        except Exception as e:
+            print(f"❌ خطأ عام: {e}")
+            time.sleep(10)
+
+if name == "__main__":
+    main()
